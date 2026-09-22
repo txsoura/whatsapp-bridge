@@ -1,13 +1,11 @@
 name: Deploy bridge
 
-# Self-contained inside bridge/ on purpose — this whole folder is meant to be cut out into its
-# own GitHub repo later. GitHub only runs workflows found at a repo's actual root .github/workflows/,
-# so this file is inert while nested here and activates automatically the moment bridge/ becomes
-# its own repo (no paths filter needed then — everything in that repo IS the bridge).
+# Runs from this repo's actual root .github/workflows/ — no paths filter needed since
+# everything in this repo IS the bridge.
 #
 # Secrets (DATABASE_CONNECTION_URI, AUTHENTICATION_API_KEY, etc.) are NOT synced from this repo —
 # the VPS is logged into Doppler itself and re-pulls the current .env from there on every deploy.
-# See bridge/VPS_SETUP.md for the one-time `doppler login`/`doppler setup` step.
+# See VPS_SETUP.md for the one-time `doppler login`/`doppler setup` step.
 on:
   push:
     branches: [main]

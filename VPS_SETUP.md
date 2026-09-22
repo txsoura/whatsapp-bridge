@@ -1,8 +1,7 @@
 # VPS setup guide
 
 Step-by-step instructions to get the bridge (Evolution API + gatekeeper) running on a fresh
-VPS and wired up to the `deploy.yml` GitHub Actions workflow. Lives inside `bridge/` on
-purpose — travels with this folder if it's cut into its own repo later.
+VPS and wired up to the `deploy.yml` GitHub Actions workflow in this repo.
 
 ## 1. VPS sizing
 
@@ -71,15 +70,16 @@ Keep your existing **private** key (e.g. `~/.ssh/id_ed25519`) — its contents g
 
 ## 7. First-time copy of the bridge folder
 
-CI/CD only *syncs* an already-existing folder — you need it there once, manually, the first time:
+CI/CD only *syncs* an already-existing folder — you need it there once, manually, the first time.
+From your local clone of this repo:
 ```bash
-# from your own machine
-scp -r bridge/ deploy@<vps-ip>:/home/deploy/bridge
+cd path/to/whatsapp-bridge
+scp -r . deploy@<vps-ip>:/home/deploy/bridge
 ```
 
 ## 8. Set up secrets via Doppler (one shared `.env` for both services)
 
-`bridge/.env.example` covers both Evolution API and the gatekeeper in one file now — the
+`.env.example` covers both Evolution API and the gatekeeper in one file now — the
 gatekeeper reads the same `AUTHENTICATION_API_KEY` Evolution API uses, no separate copy to keep
 in sync. Install and authenticate the Doppler CLI on the VPS itself:
 
@@ -100,7 +100,7 @@ doppler secrets download --no-file --format env > .env
 ```
 
 Re-run that command any time you update a secret in Doppler — the deploy workflow already
-does this automatically on every push (see `bridge/.github/workflows/deploy.yml`).
+does this automatically on every push (see `.github/workflows/deploy.yml`).
 
 Edit `Caddyfile` and replace `whatsapp.yourdomain.com` with your real domain.
 
@@ -124,8 +124,7 @@ Repo → Settings → Secrets and variables → Actions → add:
 | `VPS_USER` | `deploy` |
 | `VPS_PATH` | `/home/deploy/bridge` |
 
-From now on, pushing to `main` re-syncs and rebuilds automatically via `.github/workflows/deploy.yml`
-(once `bridge/` is its own repo — see the note in that file about why it's inert while nested).
+From now on, pushing to `main` re-syncs and rebuilds automatically via `.github/workflows/deploy.yml`.
 
 ## 11. Register your first project and connect an instance
 
@@ -136,5 +135,5 @@ docker compose exec gatekeeper npm run add-project -- --id my-project --prefix m
 # copy the printed project key into that project's own env vars
 ```
 Then create the first instance either through the Evolution Manager UI (same domain, log in
-with `AUTHENTICATION_API_KEY`) or via the gatekeeper API — see `bridge/API.md` for the full
+with `AUTHENTICATION_API_KEY`) or via the gatekeeper API — see `API.md` for the full
 endpoint reference.
