@@ -34,6 +34,9 @@ curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | sudo gpg --d
 curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | sudo tee /etc/apt/sources.list.d/caddy-stable.list
 sudo apt update
 sudo apt install -y caddy
+
+# Doppler CLI (installed system-wide here as root; deploy has no sudo access on purpose)
+curl -Ls https://cli.doppler.com/install.sh | sudo sh
 ```
 
 ## 5. Firewall
@@ -81,11 +84,12 @@ scp -r . deploy@<vps-ip>:/home/deploy/bridge
 
 `.env.example` covers both Evolution API and the gatekeeper in one file now — the
 gatekeeper reads the same `AUTHENTICATION_API_KEY` Evolution API uses, no separate copy to keep
-in sync. Install and authenticate the Doppler CLI on the VPS itself:
+in sync.
 
+The Doppler CLI was already installed system-wide back in step 4 — just authenticate as
+`deploy` (the user that will actually run the app):
 ```bash
 ssh deploy@<vps-ip>
-curl -Ls https://cli.doppler.com/install.sh | sudo sh
 doppler login              # opens a browser-based auth flow
 cd ~/bridge
 doppler setup              # pick your Doppler project + config for this bridge
@@ -109,8 +113,18 @@ Edit `Caddyfile` and replace `whatsapp.yourdomain.com` with your real domain.
 ```bash
 cd ~/bridge
 docker compose up -d --build
-sudo caddy run --config Caddyfile --adapter caddyfile &   # or install as a systemd service
 ```
+
+Caddy was already installed as a systemd service in step 4 (runs as root automatically, no
+sudo needed from `deploy` day-to-day) — it just needs the real `Caddyfile` in place once, as
+`root`:
+```bash
+ssh root@<vps-ip>
+cp /home/deploy/bridge/Caddyfile /etc/caddy/Caddyfile
+systemctl reload caddy
+```
+This persists across reboots on its own — no background process to babysit.
+
 Verify: `curl https://whatsapp.yourdomain.com` should respond (Evolution API / Manager UI).
 
 ## 10. Wire up GitHub Actions (for future auto-deploys)
