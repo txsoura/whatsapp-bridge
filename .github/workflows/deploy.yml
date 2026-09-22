@@ -1,0 +1,41 @@
+name: Deploy bridge
+
+# Self-contained inside bridge/ on purpose — this whole folder is meant to be cut out into its
+# own GitHub repo later. GitHub only runs workflows found at a repo's actual root .github/workflows/,
+# so this file is inert while nested here and activates automatically the moment bridge/ becomes
+# its own repo (no paths filter needed then — everything in that repo IS the bridge).
+#
+# Secrets (DATABASE_CONNECTION_URI, AUTHENTICATION_API_KEY, etc.) are NOT synced from this repo —
+# the VPS is logged into Doppler itself and re-pulls the current .env from there on every deploy.
+# See bridge/VPS_SETUP.md for the one-time `doppler login`/`doppler setup` step.
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up SSH
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H "${{ secrets.VPS_HOST }}" >> ~/.ssh/known_hosts
+
+      # --delete keeps the VPS folder mirrored to this repo, but the excludes below make sure
+      # it never touches the real .env files or the gatekeeper's runtime project registry.
+      - name: Sync repo to VPS
+        run: |
+          rsync -avz --delete \
+            --exclude ".env" --exclude ".git" \
+            --exclude "proxy/data" --exclude "proxy/node_modules" --exclude "proxy/dist" \
+            -e "ssh -i ~/.ssh/id_ed25519" \
+            ./ "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:${{ secrets.VPS_PATH }}/"
+
+      - name: Rebuild and restart containers
+        run: |
+          ssh -i ~/.ssh/id_ed25519 "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}" \
+            "cd ${{ secrets.VPS_PATH }} && doppler secrets download --no-file --format env > .env && docker compose up -d --build && docker image prune -f"

@@ -1,0 +1,8 @@
+# Self-contained so this ignore list travels with bridge/ when it's cut into its own repo.
+node_modules/
+proxy/node_modules/
+proxy/dist/
+proxy/data/
+
+.env*
+!.env.example

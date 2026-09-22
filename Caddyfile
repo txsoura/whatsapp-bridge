@@ -1,0 +1,11 @@
+whatsapp.yourdomain.com {
+	# Instance-creation requests go through the gatekeeper (project keys only); everything
+	# else (sending/receiving with a per-instance token) hits Evolution API directly.
+	handle /gatekeeper/* {
+		uri strip_prefix /gatekeeper
+		reverse_proxy 127.0.0.1:8081
+	}
+	handle {
+		reverse_proxy 127.0.0.1:8080
+	}
+}

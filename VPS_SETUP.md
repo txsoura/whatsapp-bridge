@@ -1,0 +1,140 @@
+# VPS setup guide
+
+Step-by-step instructions to get the bridge (Evolution API + gatekeeper) running on a fresh
+VPS and wired up to the `deploy.yml` GitHub Actions workflow. Lives inside `bridge/` on
+purpose — travels with this folder if it's cut into its own repo later.
+
+## 1. VPS sizing
+
+Postgres and Redis are offloaded to Neon/Upstash (free tiers), so the VPS only runs Docker +
+the two small app containers (Evolution API, gatekeeper) + Caddy. Still, recommend at least a
+**1–2 GB RAM** plan — a 512 MB box is too tight once Docker itself is added on top.
+
+## 2. Provision the free managed services (if not done yet)
+
+- **Neon** (Postgres): create an account/project, copy the connection string
+- **Upstash** (Redis): create an account/database, copy the `rediss://` URI
+
+## 3. Point your domain
+
+Create an **A record** for a subdomain (e.g. `whatsapp.yourdomain.com`) pointing at the VPS's
+public IPv4 address.
+
+## 4. SSH in and install the base software
+
+```bash
+sudo apt update && sudo apt upgrade -y
+
+# Docker + Compose plugin
+curl -fsSL https://get.docker.com | sh
+sudo usermod -aG docker $USER   # log out/in after this so `docker` works without sudo
+
+# Caddy (automatic HTTPS reverse proxy)
+sudo apt install -y debian-keyring debian-archive-keyring apt-transport-https curl
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | sudo gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | sudo tee /etc/apt/sources.list.d/caddy-stable.list
+sudo apt update
+sudo apt install -y caddy
+```
+
+## 5. Firewall
+
+Open only what's needed — the app containers themselves are bound to `127.0.0.1` and are never
+reachable from outside the VPS:
+
+```bash
+sudo ufw allow 22    # SSH
+sudo ufw allow 80    # Let's Encrypt HTTP-01 challenge
+sudo ufw allow 443   # HTTPS
+sudo ufw enable
+```
+
+## 6. Create a dedicated deploy user (for CI/CD, not root)
+
+```bash
+sudo adduser deploy
+sudo usermod -aG docker deploy
+```
+
+Using your existing SSH key (same one already trusted elsewhere) instead of a dedicated
+deploy-only key — simpler, but a leaked `DEPLOY_SSH_KEY` GitHub secret then exposes everywhere
+else that key is trusted too, not just this `deploy` user. Add your existing **public** key
+(e.g. `~/.ssh/id_ed25519.pub`) to the new user on the VPS:
+```bash
+sudo mkdir -p /home/deploy/.ssh
+sudo tee /home/deploy/.ssh/authorized_keys < ~/.ssh/id_ed25519.pub
+sudo chown -R deploy:deploy /home/deploy/.ssh
+sudo chmod 700 /home/deploy/.ssh && sudo chmod 600 /home/deploy/.ssh/authorized_keys
+```
+Keep your existing **private** key (e.g. `~/.ssh/id_ed25519`) — its contents go into the
+`DEPLOY_SSH_KEY` GitHub secret, same as before.
+
+## 7. First-time copy of the bridge folder
+
+CI/CD only *syncs* an already-existing folder — you need it there once, manually, the first time:
+```bash
+# from your own machine
+scp -r bridge/ deploy@<vps-ip>:/home/deploy/bridge
+```
+
+## 8. Set up secrets via Doppler (one shared `.env` for both services)
+
+`bridge/.env.example` covers both Evolution API and the gatekeeper in one file now — the
+gatekeeper reads the same `AUTHENTICATION_API_KEY` Evolution API uses, no separate copy to keep
+in sync. Install and authenticate the Doppler CLI on the VPS itself:
+
+```bash
+ssh deploy@<vps-ip>
+curl -Ls https://cli.doppler.com/install.sh | sudo sh
+doppler login              # opens a browser-based auth flow
+cd ~/bridge
+doppler setup              # pick your Doppler project + config for this bridge
+```
+
+Create a Doppler config with all the keys from `.env.example` (Neon `DATABASE_CONNECTION_URI`,
+Upstash `CACHE_REDIS_URI`, a generated `AUTHENTICATION_API_KEY`, your real `SERVER_URL`, etc.)
+in the Doppler dashboard, then pull them down as the real `.env`:
+
+```bash
+doppler secrets download --no-file --format env > .env
+```
+
+Re-run that command any time you update a secret in Doppler — the deploy workflow already
+does this automatically on every push (see `bridge/.github/workflows/deploy.yml`).
+
+Edit `Caddyfile` and replace `whatsapp.yourdomain.com` with your real domain.
+
+## 9. First manual launch
+
+```bash
+cd ~/bridge
+docker compose up -d --build
+sudo caddy run --config Caddyfile --adapter caddyfile &   # or install as a systemd service
+```
+Verify: `curl https://whatsapp.yourdomain.com` should respond (Evolution API / Manager UI).
+
+## 10. Wire up GitHub Actions (for future auto-deploys)
+
+Repo → Settings → Secrets and variables → Actions → add:
+
+| Secret | Value |
+|---|---|
+| `DEPLOY_SSH_KEY` | contents of `bridge_deploy_key` (the private key) |
+| `VPS_HOST` | VPS IP or domain |
+| `VPS_USER` | `deploy` |
+| `VPS_PATH` | `/home/deploy/bridge` |
+
+From now on, pushing to `main` re-syncs and rebuilds automatically via `.github/workflows/deploy.yml`
+(once `bridge/` is its own repo — see the note in that file about why it's inert while nested).
+
+## 11. Register your first project and connect an instance
+
+No Node.js needed on the host — run the CLI inside the already-running gatekeeper container:
+```bash
+cd ~/bridge
+docker compose exec gatekeeper npm run add-project -- --id cosmopolita --prefix cosmopolita-
+# copy the printed project key into Cosmopolita's own env vars
+```
+Then create the first instance either through the Evolution Manager UI (same domain, log in
+with `AUTHENTICATION_API_KEY`) or via the gatekeeper API — see `bridge/API.md` for the full
+endpoint reference.
