@@ -132,8 +132,8 @@ From now on, pushing to `main` re-syncs and rebuilds automatically via `.github/
 No Node.js needed on the host — run the CLI inside the already-running gatekeeper container:
 ```bash
 cd ~/bridge
-docker compose exec gatekeeper npm run add-project -- --id cosmopolita --prefix cosmopolita-
-# copy the printed project key into Cosmopolita's own env vars
+docker compose exec gatekeeper npm run add-project -- --id my-project --prefix my-project-
+# copy the printed project key into that project's own env vars
 ```
 Then create the first instance either through the Evolution Manager UI (same domain, log in
 with `AUTHENTICATION_API_KEY`) or via the gatekeeper API — see `bridge/API.md` for the full

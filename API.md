@@ -16,7 +16,7 @@ Base URL for both, once deployed: `https://whatsapp.yourdomain.com` (gatekeeper 
 | Credential | Held by | Can do |
 |---|---|---|
 | `AUTHENTICATION_API_KEY` | Evolution API + gatekeeper only (one shared value, never leaves the deployment) | Everything — create/delete any instance across all projects |
-| Project key (from `add-project`) | Each consuming project (e.g. Cosmopolita's backend env) | Create instances, but only named with its own prefix |
+| Project key (from `add-project`) | Each consuming project (e.g. a project's own backend env) | Create instances, but only named with its own prefix |
 | Per-instance token (returned by instance creation) | Each consuming project, one per instance it owns | Send/receive messages for that one instance only |
 
 ## Gatekeeper endpoints (`/gatekeeper/*`)
@@ -28,7 +28,7 @@ Create a new WhatsApp instance under the caller's own prefix.
 
 **Body:**
 ```json
-{ "instanceName": "cosmopolita-<propertyId>" }
+{ "instanceName": "<your-project-prefix>-<id>" }
 ```
 Rejected with `403` if `instanceName` doesn't start with the project's registered prefix.
 
@@ -67,14 +67,14 @@ Evolution API's send-message payload shape has evolved across versions.)*
 
 **Body (typical shape):**
 ```json
-{ "number": "<whatsapp-jid-or-phone>", "text": "Hello from Cosmopolita" }
+{ "number": "<whatsapp-jid-or-phone>", "text": "Hello from your project" }
 ```
 
 ### Webhooks (inbound messages)
 Configured per-instance at creation time (via `webhook` fields on `POST /instance/create`, or
 set afterward through the Manager UI / instance settings endpoint). Evolution API POSTs
 message events to whichever URL that instance is configured with — point it at the consuming
-project's own webhook route (e.g. Cosmopolita's `/api/webhooks/whatsapp`).
+project's own webhook route (e.g. `/api/webhooks/whatsapp`).
 
 ## Onboarding a new project (CLI)
 

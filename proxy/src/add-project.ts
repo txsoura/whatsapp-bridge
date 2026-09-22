@@ -1,7 +1,7 @@
 import { randomBytes } from "crypto";
 import { hashKey, loadRegistry, saveRegistry } from "./registry";
 
-/** Usage: npm run add-project -- --id cosmopolita --prefix cosmopolita- */
+/** Usage: npm run add-project -- --id my-project --prefix my-project- */
 function parseArgs(): { projectId: string; instancePrefix: string } {
   const args = process.argv.slice(2);
   const get = (flag: string) => {
