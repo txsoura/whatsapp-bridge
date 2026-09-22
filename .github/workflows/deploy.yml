@@ -36,4 +36,13 @@ jobs:
       - name: Rebuild and restart containers
         run: |
           ssh -i ~/.ssh/id_ed25519 "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}" \
-            "cd ${{ secrets.VPS_PATH }} && doppler secrets download --no-file --format env > .env && docker compose up -d --build && docker image prune -f"
+            "cd ${{ secrets.VPS_PATH }} && doppler secrets download --no-file --format env > .env && docker compose up -d --build"
+
+      # -af removes stopped containers, unused networks, ALL unused images (not just dangling
+      # ones left over from --build), and the build cache. Never touches volumes — the
+      # evolution_instances volume (WhatsApp session data) and proxy/data (bind mount, not a
+      # volume at all) are both safe regardless.
+      - name: Clean up unused Docker storage
+        run: |
+          ssh -i ~/.ssh/id_ed25519 "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}" \
+            "docker system prune -af"

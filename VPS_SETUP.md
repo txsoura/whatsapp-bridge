@@ -39,6 +39,59 @@ sudo apt install -y caddy
 curl -Ls https://cli.doppler.com/install.sh | sudo sh
 ```
 
+### Cap disk usage that grows over time, not per-deploy
+
+Container logs, the systemd journal, and apt's package cache all grow continuously regardless
+of how often you push — the Docker cleanup step in `deploy.yml` doesn't touch any of these.
+Configure limits once, as root, and they self-maintain from here on:
+
+```bash
+# Cap Docker container log size (Evolution API/Baileys can log a lot) — applies to new
+# containers, so run this before "docker compose up" for the first time.
+sudo tee /etc/docker/daemon.json <<'EOF'
+{ "log-driver": "json-file", "log-opts": { "max-size": "10m", "max-file": "3" } }
+EOF
+sudo systemctl restart docker
+
+# Cap the systemd journal so logs don't grow unbounded
+sudo journalctl --vacuum-size=200M
+
+# Clear apt's downloaded package cache and any now-unused packages/old kernels
+sudo apt autoremove -y
+sudo apt clean
+```
+
+Automate that last part with a weekly systemd timer, so it self-maintains from here on
+(deliberately not bundling in automatic package *upgrades* — that's a separate tradeoff, this
+is purely safe disk cleanup):
+
+```bash
+sudo tee /etc/systemd/system/apt-cleanup.service <<'EOF'
+[Unit]
+Description=Weekly apt autoremove + clean
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/apt-get autoremove -y
+ExecStart=/usr/bin/apt-get clean
+EOF
+
+sudo tee /etc/systemd/system/apt-cleanup.timer <<'EOF'
+[Unit]
+Description=Run apt-cleanup weekly
+
+[Timer]
+OnCalendar=weekly
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOF
+
+sudo systemctl enable --now apt-cleanup.timer
+```
+Verify it's scheduled: `systemctl list-timers apt-cleanup.timer`
+
 ## 5. Firewall
 
 Open only what's needed — the app containers themselves are bound to `127.0.0.1` and are never
