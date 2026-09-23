@@ -61,14 +61,19 @@ app.post("/instances", async (req, res) => {
       ? { instanceName, integration: resolvedIntegration, number, token, businessId }
       : { instanceName, qrcode: true, integration: resolvedIntegration };
 
-  const response = await fetch(`${EVOLUTION_API_URL}/instance/create`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", apikey: EVOLUTION_API_GLOBAL_KEY },
-    body: JSON.stringify(body),
-  });
+  try {
+    const response = await fetch(`${EVOLUTION_API_URL}/instance/create`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", apikey: EVOLUTION_API_GLOBAL_KEY },
+      body: JSON.stringify(body),
+    });
 
-  const data = await response.json();
-  res.status(response.status).json(data);
+    const data = await response.json();
+    res.status(response.status).json(data);
+  } catch (err) {
+    console.error("Evolution API create request failed", err);
+    res.status(502).json({ error: "Evolution API unreachable" });
+  }
 });
 
 app.get("/instances/:name/connect", async (req, res) => {
@@ -81,12 +86,17 @@ app.get("/instances/:name/connect", async (req, res) => {
     return;
   }
 
-  const response = await fetch(`${EVOLUTION_API_URL}/instance/connect/${instanceName}`, {
-    headers: { apikey: EVOLUTION_API_GLOBAL_KEY },
-  });
+  try {
+    const response = await fetch(`${EVOLUTION_API_URL}/instance/connect/${instanceName}`, {
+      headers: { apikey: EVOLUTION_API_GLOBAL_KEY },
+    });
 
-  const data = await response.json();
-  res.status(response.status).json(data);
+    const data = await response.json();
+    res.status(response.status).json(data);
+  } catch (err) {
+    console.error("Evolution API connect request failed", err);
+    res.status(502).json({ error: "Evolution API unreachable" });
+  }
 });
 
 // Logout disconnects the WhatsApp session but keeps the instance registered — reconnect via /connect.
@@ -100,13 +110,18 @@ app.delete("/instances/:name/logout", async (req, res) => {
     return;
   }
 
-  const response = await fetch(`${EVOLUTION_API_URL}/instance/logout/${instanceName}`, {
-    method: "DELETE",
-    headers: { apikey: EVOLUTION_API_GLOBAL_KEY },
-  });
+  try {
+    const response = await fetch(`${EVOLUTION_API_URL}/instance/logout/${instanceName}`, {
+      method: "DELETE",
+      headers: { apikey: EVOLUTION_API_GLOBAL_KEY },
+    });
 
-  const data = await response.json();
-  res.status(response.status).json(data);
+    const data = await response.json();
+    res.status(response.status).json(data);
+  } catch (err) {
+    console.error("Evolution API logout request failed", err);
+    res.status(502).json({ error: "Evolution API unreachable" });
+  }
 });
 
 app.delete("/instances/:name", async (req, res) => {
@@ -119,15 +134,27 @@ app.delete("/instances/:name", async (req, res) => {
     return;
   }
 
-  const response = await fetch(`${EVOLUTION_API_URL}/instance/delete/${instanceName}`, {
-    method: "DELETE",
-    headers: { apikey: EVOLUTION_API_GLOBAL_KEY },
-  });
+  try {
+    const response = await fetch(`${EVOLUTION_API_URL}/instance/delete/${instanceName}`, {
+      method: "DELETE",
+      headers: { apikey: EVOLUTION_API_GLOBAL_KEY },
+    });
 
-  const data = await response.json();
-  res.status(response.status).json(data);
+    const data = await response.json();
+    res.status(response.status).json(data);
+  } catch (err) {
+    console.error("Evolution API delete request failed", err);
+    res.status(502).json({ error: "Evolution API unreachable" });
+  }
 });
 
-app.listen(PORT, "127.0.0.1", () => {
+const server = app.listen(PORT, "127.0.0.1", () => {
   console.log(`Gatekeeper listening on 127.0.0.1:${PORT}`);
 });
+
+// Must exceed Caddy's upstream keep-alive idle window, otherwise Node closes pooled
+// connections Caddy still considers reusable, causing intermittent "connection reset by peer".
+server.keepAliveTimeout = 65_000;
+server.headersTimeout = 66_000;
+
+
