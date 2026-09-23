@@ -148,8 +148,11 @@ app.delete("/instances/:name", async (req, res) => {
   }
 });
 
-const server = app.listen(PORT, "127.0.0.1", () => {
-  console.log(`Gatekeeper listening on 127.0.0.1:${PORT}`);
+// Bind all interfaces — docker-compose's "127.0.0.1:PORT:PORT" mapping already restricts
+// host-side access to loopback only; binding to 127.0.0.1 here would be the container's own
+// loopback, which Docker's port forwarding can't reach at all.
+const server = app.listen(PORT, () => {
+  console.log(`Gatekeeper listening on port ${PORT}`);
 });
 
 // Must exceed Caddy's upstream keep-alive idle window, otherwise Node closes pooled
