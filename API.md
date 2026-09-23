@@ -16,7 +16,7 @@ Base URL for both, once deployed: `https://whatsapp.yourdomain.com` (gatekeeper 
 | Credential | Held by | Can do |
 |---|---|---|
 | `AUTHENTICATION_API_KEY` | Evolution API + gatekeeper only (one shared value, never leaves the deployment) | Everything — create/delete any instance across all projects |
-| Project key (from `add-project`) | Each consuming project (e.g. a project's own backend env) | Create instances, but only named with its own prefix |
+| Project key (from `add-project`) | Each consuming project (e.g. a project's own backend env) | Create/delete instances, but only named with its own prefix |
 | Per-instance token (returned by instance creation) | Each consuming project, one per instance it owns | Send/receive messages for that one instance only |
 
 ## Gatekeeper endpoints (`/gatekeeper/*`)
@@ -45,6 +45,22 @@ Fetch (or refresh) the pairing QR code for an existing instance.
 { "pairingCode": null, "code": "2@...", "base64": "data:image/png;base64,...", "count": 1 }
 ```
 `base64` is a ready-to-render QR image data URL — scan it with the property's WhatsApp number.
+
+### `DELETE /gatekeeper/instances/:name/logout`
+Disconnect the WhatsApp session without deleting the instance — it stays registered under the
+project's prefix and can be reconnected later with a fresh QR via the `connect` endpoint above.
+
+**Headers:** `X-Project-Key: <project key>`
+
+**Response:** forwards Evolution API's `DELETE /instance/logout/{instanceName}` response as-is.
+
+### `DELETE /gatekeeper/instances/:name`
+Delete an existing instance. Rejected with `403` if `:name` doesn't start with the caller's
+registered prefix — a project can only delete its own instances.
+
+**Headers:** `X-Project-Key: <project key>`
+
+**Response:** forwards Evolution API's `DELETE /instance/delete/{instanceName}` response as-is.
 
 ## Evolution API endpoints (called directly, using the per-instance token)
 

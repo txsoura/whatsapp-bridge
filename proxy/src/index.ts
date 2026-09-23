@@ -36,16 +36,35 @@ app.post("/instances", async (req, res) => {
   const project = authenticateProject(req, res);
   if (!project) return;
 
-  const { instanceName } = req.body as { instanceName?: string };
+  const { instanceName, integration, number, token, businessId } = req.body as {
+    instanceName?: string;
+    // Defaults to Baileys (QR pairing); pass "WHATSAPP-BUSINESS" + number/token/businessId
+    // to provision an official Meta Cloud API number through this same instance instead.
+    integration?: "WHATSAPP-BAILEYS" | "WHATSAPP-BUSINESS";
+    number?: string;
+    token?: string;
+    businessId?: string;
+  };
   if (!instanceName || !ownsInstanceName(instanceName, project.instancePrefix)) {
     res.status(403).json({ error: `instanceName must start with '${project.instancePrefix}'` });
     return;
   }
 
+  const resolvedIntegration = integration ?? "WHATSAPP-BAILEYS";
+  if (resolvedIntegration === "WHATSAPP-BUSINESS" && (!number || !token || !businessId)) {
+    res.status(400).json({ error: "number, token and businessId are required for WHATSAPP-BUSINESS integration" });
+    return;
+  }
+
+  const body =
+    resolvedIntegration === "WHATSAPP-BUSINESS"
+      ? { instanceName, integration: resolvedIntegration, number, token, businessId }
+      : { instanceName, qrcode: true, integration: resolvedIntegration };
+
   const response = await fetch(`${EVOLUTION_API_URL}/instance/create`, {
     method: "POST",
     headers: { "Content-Type": "application/json", apikey: EVOLUTION_API_GLOBAL_KEY },
-    body: JSON.stringify({ instanceName, qrcode: true, integration: "WHATSAPP-BAILEYS" }),
+    body: JSON.stringify(body),
   });
 
   const data = await response.json();
@@ -63,6 +82,45 @@ app.get("/instances/:name/connect", async (req, res) => {
   }
 
   const response = await fetch(`${EVOLUTION_API_URL}/instance/connect/${instanceName}`, {
+    headers: { apikey: EVOLUTION_API_GLOBAL_KEY },
+  });
+
+  const data = await response.json();
+  res.status(response.status).json(data);
+});
+
+// Logout disconnects the WhatsApp session but keeps the instance registered — reconnect via /connect.
+app.delete("/instances/:name/logout", async (req, res) => {
+  const project = authenticateProject(req, res);
+  if (!project) return;
+
+  const instanceName = req.params.name;
+  if (!ownsInstanceName(instanceName, project.instancePrefix)) {
+    res.status(403).json({ error: "not your instance" });
+    return;
+  }
+
+  const response = await fetch(`${EVOLUTION_API_URL}/instance/logout/${instanceName}`, {
+    method: "DELETE",
+    headers: { apikey: EVOLUTION_API_GLOBAL_KEY },
+  });
+
+  const data = await response.json();
+  res.status(response.status).json(data);
+});
+
+app.delete("/instances/:name", async (req, res) => {
+  const project = authenticateProject(req, res);
+  if (!project) return;
+
+  const instanceName = req.params.name;
+  if (!ownsInstanceName(instanceName, project.instancePrefix)) {
+    res.status(403).json({ error: "not your instance" });
+    return;
+  }
+
+  const response = await fetch(`${EVOLUTION_API_URL}/instance/delete/${instanceName}`, {
+    method: "DELETE",
     headers: { apikey: EVOLUTION_API_GLOBAL_KEY },
   });
 
